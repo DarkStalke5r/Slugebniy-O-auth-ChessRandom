@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Chess — вход и регистрация</title>
+<style>
+:root{color-scheme:dark}*{box-sizing:border-box}
+body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#12121a;color:#eee;font:15px/1.45 system-ui,sans-serif;padding:16px}
+.card{width:min(94vw,440px);background:#1d1d25;border-radius:16px;padding:22px;box-shadow:0 10px 40px rgba(0,0,0,.6)}
+h1{font-size:20px;margin:0 0 12px;text-align:center}
+input{width:100%;margin:4px 0;padding:11px 12px;border-radius:9px;border:1px solid #444;background:#12121a;color:#fff;font-size:15px}
+.btn{width:100%;margin-top:8px;padding:11px;border-radius:10px;border:0;background:#2ea6ff;color:#fff;font-size:15px;cursor:pointer}
+.btn:disabled{opacity:.6}.sec{background:#33333f}
+.tabs{display:flex;gap:6px;margin-bottom:8px}.tabs .btn{margin:0}
+.msg{min-height:20px;margin-top:8px;font-size:13px;color:#ffb020}.err{color:#ff7070}.ok{color:#7be07b}
+a{color:#7aa7ff;cursor:pointer;font-size:13px;text-decoration:underline}
+.links{display:flex;justify-content:space-between;margin:8px 0}
+.sep{text-align:center;color:#777;font-size:12px;margin:10px 0}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.oa{padding:9px;border-radius:9px;border:0;color:#fff;font-size:13px;cursor:pointer;border-left:6px solid var(--c);background:#2a2a35}
+#ov{position:fixed;inset:0;background:rgba(0,0,0,.85);display:none;align-items:center;justify-content:center;text-align:center;padding:20px;z-index:9}
+</style>
+</head>
+<body>
+<div class="card"><h1>♟️ Chess</h1><div id="v">Загрузка…</div><div class="msg" id="m"></div></div>
+<div id="ov"><div><div style="font-size:40px">🛠️</div><p id="ot"></p>
+<button class="btn" id="og">Перейти сейчас</button><button class="btn sec" id="os">Остаться здесь</button></div></div>
+
+<script>
+var SB='https://wlirbdneulstqsjburjh.supabase.co',KEY='sb_publishable_l5GduuCh5WB5DI5ecqAc-g_HjGZK802';
+var GAME='https://darkstalke5r.github.io/ChessRandom/',ERR='http://chessrandomierr.duckdns.org/',SELF=location.origin+'/';
+var $=function(i){return document.getElementById(i)},Q=new URLSearchParams(location.search),enc=encodeURIComponent;
+var PROV={discord:['Discord','#5865F2'],github:['GitHub','#8b949e'],google:['Google','#ea4335'],twitch:['Twitch','#9146ff'],gitlab:['GitLab','#fc6d26'],
+ facebook:['Facebook','#1877f2'],apple:['Apple','#bbb'],azure:['Microsoft','#00a4ef'],twitter:['X / Twitter','#1d9bf0'],x:['X (Twitter)','#1d9bf0'],
+ spotify:['Spotify','#1db954'],slack_oidc:['Slack','#e01e5a'],slack:['Slack','#e01e5a'],linkedin_oidc:['LinkedIn','#0a66c2'],linkedin:['LinkedIn','#0a66c2'],
+ notion:['Notion','#fff'],bitbucket:['Bitbucket','#2684ff'],figma:['Figma','#f24e1e'],kakao:['Kakao','#fee500'],zoom:['Zoom','#2d8cff'],
+ keycloak:['Keycloak','#4d4d4d'],workos:['WorkOS','#6363f1'],fly:['Fly.io','#8b5cf6'],vercel_marketplace:['Vercel','#fff']};
+var SKIP=/^(email|phone|anonymous_users|saml|web3.*|.*_oidc_)$/;
+
+/* ---- куда вернуть игрока (только свои адреса!) ---- */
+function okRet(u){try{var x=new URL(u);return x.origin==='https://darkstalke5r.github.io'||x.hostname==='localhost'||x.hostname==='127.0.0.1'}catch(e){return false}}
+var ctx={ret:GAME,state:''};
+try{var s0=JSON.parse(localStorage.getItem('ca_ctx')||'null');if(s0&&Date.now()-s0.t<36e5&&okRet(s0.ret))ctx=s0}catch(e){}
+if(Q.get('return')&&okRet(Q.get('return'))){ctx={ret:Q.get('return'),state:Q.get('state')||'',t:Date.now()};try{localStorage.setItem('ca_ctx',JSON.stringify(ctx))}catch(e){}}
+
+/* ---- ошибки/тех. работы → резервный сайт (http) ---- */
+var failed=0,timer;
+function say(t,c){$('m').className='msg '+(c||'');$('m').textContent=t||''}
+function fail(reason){
+  if(failed)return;failed=1;var n=0;
+  try{n=+(sessionStorage.getItem('ef')||0)+1;sessionStorage.setItem('ef',n)}catch(e){}
+  if(Q.get('r')||n>3){failed=0;say('Сервис временно недоступен ('+reason+'). Попробуй позже.','err');return}
+  var url=ERR+'?from=auth&reason='+enc(reason)+'&back='+enc(ctx.ret),left=4;
+  $('ov').style.display='flex';
+  function tick(){$('ot').textContent='Что-то пошло не так ('+reason+'). Перехожу на резервный сайт через '+left+' с…';if(left--<=0)location.href=url;else timer=setTimeout(tick,1000)}
+  tick();$('og').onclick=function(){location.href=url};
+  $('os').onclick=function(){clearTimeout(timer);$('ov').style.display='none';failed=0}
+}
+window.addEventListener('error',function(e){if(!e.filename||e.filename.indexOf(location.origin)===0)fail('js_error')});
+window.addEventListener('unhandledrejection',function(e){if(!(e.reason&&e.reason.handled))fail('js_error')});
+
+/* ---- API ---- */
+function tr(m){var L=[[/invalid login/i,'Неверный email или пароль (или почта не подтверждена)'],[/not confirmed/i,'Почта не подтверждена — открой ссылку из письма'],
+ [/rate limit|too many|seconds/i,'Слишком много попыток — подожди немного'],[/already (been )?registered/i,'Этот email уже зарегистрирован — войди'],
+ [/at least/i,'Пароль слишком короткий (минимум 6 символов)'],[/different from the old/i,'Новый пароль должен отличаться от старого'],
+ [/duplicate key|23505/i,'Такой ник уже занят'],[/signups not allowed|disabled/i,'Этот способ сейчас отключён']];
+ for(var i=0;i<L.length;i++)if(L[i][0].test(m))return L[i][1];return m}
+async function api(p,o,t){
+  o=o||{};var h={apikey:KEY,'Content-Type':'application/json'};if(t)h.Authorization='Bearer '+t;if(o.prefer)h.Prefer=o.prefer;
+  var c=new AbortController(),tm=setTimeout(function(){c.abort()},10000),r,j;
+  try{r=await fetch(SB+p,{method:o.method||'GET',headers:h,body:o.body,signal:c.signal})}
+  catch(e){clearTimeout(tm);fail('supabase_unreachable');var x=new Error('Нет связи с сервером');x.handled=1;throw x}
+  clearTimeout(tm);try{j=await r.json()}catch(e){j={}}
+  if(r.status>=500){fail('supabase_'+r.status);var y=new Error('Ошибка сервера');y.handled=1;throw y}
+  if(!r.ok){var z=new Error(tr(j.msg||j.message||j.error_description||j.error||('Ошибка '+r.status)));z.handled=1;throw z}
+  return j}
+function b64(s){return btoa(unescape(enc(s))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')}
+function go(p){p.state=ctx.state;try{localStorage.removeItem('ca_ctx')}catch(e){}
+  var u=new URL(ctx.ret);u.hash='ca='+b64(JSON.stringify(p));location.href=u.toString()}   // сессию сайт НЕ хранит — только отдаёт игре
+function sess(s){return {t:'session',access_token:s.access_token,refresh_token:s.refresh_token,
+  expires_at:s.expires_at||Math.floor(Date.now()/1e3)+(+s.expires_in||3600)}}
+async function finish(s){
+  var u=s.user||await api('/auth/v1/user',0,s.access_token),md=u.user_metadata||{};
+  if(!md.nickname){nickView(s,u);return}
+  var p=sess(s);p.nick=md.nickname;go(p)}
+
+/* ---- экраны ---- */
+var mode='in',draft={},cfg={external:{}};
+function btn(id,fn){$(id).onclick=fn}
+function busy(b,f){b.disabled=true;say('Подождите…');f().then(function(){},function(e){say(e.message,'err')}).then(function(){b.disabled=false})}
+function mainView(){
+  var up=mode==='up';
+  $('v').innerHTML='<div class="tabs"><button class="btn'+(up?' sec':'')+'" id="t1">Вход</button><button class="btn'+(up?'':' sec')+'" id="t2">Регистрация</button></div>'
+   +'<input id="em" type="email" placeholder="Email" autocomplete="email">'+(up?'<input id="nk" maxlength="24" placeholder="Ник (для таблицы лидеров)">':'')
+   +'<input id="pw" type="password" placeholder="Пароль (от 6 символов)" autocomplete="'+(up?'new':'current')+'-password">'
+   +'<button class="btn" id="go">'+(up?'Зарегистрироваться':'Войти')+'</button>'
+   +'<div class="links"><a id="ml">Войти по ссылке на почту</a><a id="fg">Забыл пароль?</a></div>'
+   +'<div class="sep">— или через —</div><div class="grid" id="oa"></div>'
+   +'<div class="links" style="justify-content:center;margin-top:12px"><a id="op">🔓 Открытый аккаунт (только ник)</a></div>';
+  $('em').value=draft.e||'';$('pw').value='';
+  var keep=function(){draft.e=$('em').value;if($('nk'))draft.n=$('nk').value};
+  if(up&&$('nk'))$('nk').value=draft.n||'';
+  btn('t1',function(){keep();mode='in';mainView()});btn('t2',function(){keep();mode='up';mainView()});
+  btn('fg',function(){keep();simpleView('forgot')});btn('ml',function(){keep();simpleView('magic')});btn('op',function(){simpleView('open')});
+  btn('go',function(){busy($('go'),async function(){
+    var e=$('em').value.trim(),p=$('pw').value,n=up?$('nk').value.trim():'';
+    if(!/^\S+@\S+\.\S+$/.test(e))throw new Error('Введи корректный email');
+    if(p.length<6)throw new Error('Пароль слишком короткий (минимум 6 символов)');
+    if(up&&(n.length<1||n.length>24))throw new Error('Введи ник (1–24 символа)');
+    if(!up){finish(await api('/auth/v1/token?grant_type=password',{method:'POST',body:JSON.stringify({email:e,password:p})}));return}
+    var j=await api('/auth/v1/signup?redirect_to='+enc(SELF),{method:'POST',body:JSON.stringify({email:e,password:p,data:{nickname:n}})});
+    if(j.access_token){finish(j);return}
+    var u=j.user||j;if(u.identities&&!u.identities.length)throw new Error('Этот email уже зарегистрирован — войди');
+    say('Готово! Открой ссылку из письма (проверь «Спам»), затем войди.','ok')})});
+  var ex=cfg.external||{},ks=Object.keys(ex).filter(function(k){return ex[k]&&!SKIP.test(k)});
+  if(!ks.length){$('oa').parentNode.removeChild($('oa').previousSibling);$('oa').style.display='none'}
+  ks.forEach(function(k){var d=PROV[k]||[k.replace(/_/g,' '),'#888'],b=document.createElement('button');
+    b.className='oa';b.style.setProperty('--c',d[1]);b.textContent=d[0];
+    b.onclick=function(){location.href=SB+'/auth/v1/authorize?provider='+k+'&redirect_to='+enc(SELF)};$('oa').appendChild(b)})
+}
+function simpleView(k){
+  var T={forgot:['Сброс пароля','Отправить ссылку','email'],magic:['Вход по ссылке','Отправить ссылку','email'],open:['Открытый аккаунт','Войти','nick']}[k];
+  $('v').innerHTML='<p style="color:#b8b8c6;margin:0 0 6px">'+({forgot:'Пришлю письмо со ссылкой для нового пароля.',magic:'Пришлю ссылку — по ней войдёшь без пароля (новый аккаунт создастся сам).',
+   open:'Без пароля и почты. ⚠ Войти сможет любой, кто знает ник.'})[k]+'</p>'
+   +'<input id="x" '+(T[2]==='email'?'type="email" placeholder="Email"':'maxlength="24" placeholder="Ник"')+'>'
+   +(k==='open'?'<button class="btn sec" id="cr">Создать такой ник</button>':'')+'<button class="btn" id="go">'+T[1]+'</button><div class="links"><a id="bk">← Назад</a></div>';
+  $('x').value=T[2]==='email'?draft.e||'':'';btn('bk',mainView);
+  function openDo(create){return async function(){
+    var n=$('x').value.trim();if(n.length<1||n.length>24)throw new Error('Ник: 1–24 символа');
+    if(create)await api('/rest/v1/open_accounts',{method:'POST',prefer:'return=minimal',body:JSON.stringify({nickname:n})});
+    var r=await api('/rest/v1/open_accounts?select=nickname&nick_lc=eq.'+enc(n.toLowerCase())+'&limit=1');
+    if(!r.length)throw new Error('Такого открытого аккаунта нет — нажми «Создать такой ник»');go({t:'open',nickname:r[0].nickname})}}
+  if(k==='open'){btn('go',function(){busy($('go'),openDo(0))});btn('cr',function(){busy($('cr'),openDo(1))});return}
+  btn('go',function(){busy($('go'),async function(){
+    var e=$('x').value.trim();if(!/^\S+@\S+\.\S+$/.test(e))throw new Error('Введи корректный email');
+    if(k==='forgot')await api('/auth/v1/recover?redirect_to='+enc(SELF),{method:'POST',body:JSON.stringify({email:e})});
+    else await api('/auth/v1/otp?redirect_to='+enc(SELF),{method:'POST',body:JSON.stringify({email:e,create_user:true,data:{nickname:e.split('@')[0].slice(0,24)}})});
+    say('Если всё верно — письмо отправлено (проверь «Спам»).','ok')})})}
+function nickView(s,u){
+  var md=u.user_metadata||{},d=(md.user_name||md.preferred_username||md.full_name||md.name||(u.email||'').split('@')[0]||'игрок').slice(0,24);
+  $('v').innerHTML='<p style="color:#b8b8c6;margin:0 0 6px">Выбери ник для таблицы лидеров:</p><input id="x" maxlength="24"><button class="btn" id="go">Продолжить</button>';
+  $('x').value=d;btn('go',function(){busy($('go'),async function(){
+    var n=$('x').value.trim();if(n.length<1||n.length>24)throw new Error('Ник: 1–24 символа');
+    await api('/auth/v1/user',{method:'PUT',body:JSON.stringify({data:{nickname:n}})},s.access_token);
+    var p=sess(s);p.nick=n;go(p)})})}
+function resetView(s){
+  $('v').innerHTML='<p style="color:#b8b8c6;margin:0 0 6px">Придумай новый пароль.</p><input id="a" type="password" placeholder="Новый пароль" autocomplete="new-password"><input id="b" type="password" placeholder="Повтори пароль" autocomplete="new-password"><button class="btn" id="go">Сохранить и вернуться в игру</button>';
+  btn('go',function(){busy($('go'),async function(){
+    if($('a').value.length<6)throw new Error('Пароль слишком короткий (минимум 6 символов)');
+    if($('a').value!==$('b').value)throw new Error('Пароли не совпадают');
+    await api('/auth/v1/user',{method:'PUT',body:JSON.stringify({password:$('a').value})},s.access_token);finish(s)})})}
+
+/* ---- запуск ---- */
+async function boot(){
+  var H=new URLSearchParams(location.hash.replace(/^#/,''));try{history.replaceState(null,'',location.pathname+(Q.get('return')?'':''))}catch(e){}
+  if(!window.fetch||!window.URLSearchParams||!window.AbortController||!window.Promise){fail('browser_unsupported');return}
+  try{localStorage.setItem('t','1');localStorage.removeItem('t')}catch(e){fail('storage_blocked');return}
+  if(!Q.get('bypass')){                              // флаг тех. работ: правится в status.json
+    try{var r=await fetch('status.json?'+Date.now(),{cache:'no-store'});if(r.ok){var st=await r.json();if(st.maintenance){fail('maintenance');return}}}catch(e){}
+  }
+  try{cfg=await api('/auth/v1/settings')}catch(e){return}   // заодно проверка, что Supabase жив + список включённых провайдеров
+  if(Q.get('mode')==='signup')mode='up';
+  var err=H.get('error');
+  if(err){var d=(H.get('error_description')||'').replace(/\+/g,' ');
+    if(/server_error|unexpected/i.test(err+H.get('error_code'))&&!/expired/i.test(d)){fail('oauth_'+err);}
+    else say(/expired|otp/i.test(d+H.get('error_code'))?'Ссылка устарела или уже использована — запроси новую.':(err==='access_denied'?'Вход отменён.':d||'Не удалось войти'),'err')}
+  var tok=H.get('access_token');
+  if(tok){var s={access_token:tok,refresh_token:H.get('refresh_token'),expires_at:+H.get('expires_at')||0,expires_in:H.get('expires_in')};
+    try{if(H.get('type')==='recovery')resetView(s);else await finish(s)}catch(e){say(e.message,'err');mainView()}return}
+  if(Q.get('mode')==='open')simpleView('open');else mainView()}
+boot();
+</script>
+</body>
+</html>
